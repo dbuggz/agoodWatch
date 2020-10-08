@@ -15,7 +15,7 @@ Created by Lewis he on October 10, 2019.
 #define STR(_s) XSTR(_s)
 #define XSTR(_s) #_s
 
-#define THIS_VERSION_ID  0.60
+#define THIS_VERSION_ID  0.611
 #define THIS_VERSION_STR "Ver " STR(THIS_VERSION_ID)
 
 /*
@@ -27,7 +27,7 @@ Created by Lewis he on October 10, 2019.
  * reported by the watch is correct before pressing "Ok" otherwise just press "Cancel" and try again.
  */
 // #define RTC_TIME_ZONE   "GMT0BST,M3.5.0/1,M10.5.0"  // Europe-London
-#define RTC_TIME_ZONE   "AEST-10AEDT,M10.1.0,M4.1.0/3"  // Sydney-Australia    // dw Original was -10... 
+// #define RTC_TIME_ZONE   "AEST-11AEDT,M10.1.0,M4.1.0/3"  // Sydney-Australia    // dw Original was -10... 
 
 /*
  * The number of milliseconds of inactivity before the watch goes to sleep. Every tap or swipe on the

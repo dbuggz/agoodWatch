@@ -18,6 +18,12 @@ Created by Lewis he on October 10, 2019.
 #include <Ticker.h>
 
 LV_FONT_DECLARE(Ubuntu);
+//dw
+LV_IMG_DECLARE(emelia_x); //dw
+LV_IMG_DECLARE(toby_1); //dw
+LV_IMG_DECLARE(pa_); //dw
+LV_IMG_DECLARE(nanny_Lil_Logan); //dw
+LV_IMG_DECLARE(nanny_1); //dw
 
 LV_IMG_DECLARE(bg2);
 LV_IMG_DECLARE(foot_16px);
@@ -55,6 +61,12 @@ static void lv_battery_task(struct _lv_task_t *);
 static int createOriginalFace (int);
 static int updateOriginalFace (int);
 static int createHomerFace (int);
+//dw predeclare these to suit Arduino IDE
+static int createEmeliaFace (int);
+static int createNannyFace (int);   
+static int createTobyFace (int);
+
+
 static int createWiFi (int);
 static int createWiFiSwitches (int);
 static int createAbout (int);
@@ -279,13 +291,14 @@ private:
 
 StatusBar bar;
 
-TileDesc_t tileDesc[] = {{0, createOriginalFace}, {1, createHomerFace},
-	                 {0, createWiFi}, {1, createWiFiSwitches},
-	                 {0, createAbout}, {1, createAboutInfo}};
+
+TileDesc_t tileDesc[] = {{0, createOriginalFace}, {1, createEmeliaFace},{2, createNannyFace},{3, createTobyFace},
+                   {0, createWiFi}, {1, createWiFiSwitches},
+                   {0, createAbout}, {1, createAboutInfo}};
 
 int numDescTiles = sizeof (tileDesc) / sizeof (TileDesc_t);
 
-#define TILE_OFFSET 2  // This value must be the number of columns.
+#define TILE_OFFSET 4  // This value must be the number of columns.
 
 lv_obj_t *tileView;
 lv_point_t *tileMap;
@@ -723,6 +736,20 @@ typedef struct
   lv_obj_t *rightEye;
 } HomerFaceData_t;
 
+//dw
+typedef struct
+{
+  lv_task_t *timeTask;
+  lv_obj_t *hourHand;
+  lv_obj_t *minHand;
+  lv_obj_t *secHand;
+  lv_obj_t *hourShadow;
+  lv_obj_t *minShadow;
+  lv_obj_t *secShadow;
+  lv_obj_t *leftEye;
+  lv_obj_t *rightEye;
+} EmeliaFaceData_t;
+
 static int updateHomerFace (int idx)
 {
   time_t now;
@@ -758,6 +785,41 @@ static int updateHomerFace (int idx)
   lv_img_set_angle (hfd->secHand, sec);
 }
 
+static int updateEmeliaFace (int idx)
+{
+  time_t now;
+  struct tm info;
+  EmeliaFaceData_t *hfd = (EmeliaFaceData_t *)(tileDesc[idx].data);
+  static int lastMin = 61;
+  
+  log_d ("idx=%d", idx);
+
+  time (&now);
+  localtime_r (&now, &info);
+
+  int sec  = 60 * info.tm_sec;
+
+  //dw lv_img_set_angle (hfd->leftEye, sec);
+  //dw lv_img_set_angle (hfd->rightEye, sec);
+
+  if (info.tm_min != lastMin)
+  {
+    lastMin = info.tm_min;
+    
+    int hour = (300 * (info.tm_hour % 12)) + (5 * lastMin);
+    int min  = 60 * lastMin;
+
+    lv_img_set_angle (hfd->minShadow, min);
+    lv_img_set_angle (hfd->minHand, min);
+
+    lv_img_set_angle (hfd->hourShadow, hour);
+    lv_img_set_angle (hfd->hourHand, hour);
+  }
+
+  lv_img_set_angle (hfd->secShadow, sec);
+  lv_img_set_angle (hfd->secHand, sec);
+}
+
 static int onEntryHomerFace (int idx)
 {
   HomerFaceData_t *hfd = (HomerFaceData_t *)(tileDesc[idx].data);
@@ -774,9 +836,42 @@ static int onEntryHomerFace (int idx)
   }
 }
 
+//dw
+static int onEntryEmeliaFace (int idx)
+{
+  EmeliaFaceData_t *hfd = (EmeliaFaceData_t *)(tileDesc[idx].data);
+
+  log_d ("idx=%d", idx);
+
+  screenTimeout = defaultScreenTimeout = DEFAULT_SCREEN_TIMEOUT * 5;
+  defaultCpuFrequency = CPU_FREQ_MAX;
+  setCpuFrequencyMhz (defaultCpuFrequency);
+
+  if (hfd->timeTask == nullptr)
+  {
+    hfd->timeTask = lv_task_create (lv_update_task, 1000, LV_TASK_PRIO_LOWEST, (void *)idx);
+  }
+}
+
 static int onExitHomerFace (int idx)
 {
   HomerFaceData_t *hfd = (HomerFaceData_t *)(tileDesc[idx].data);
+
+  log_d ("idx=%d", idx);
+
+  if (hfd->timeTask != nullptr)
+  {
+    lv_task_del (hfd->timeTask);
+    hfd->timeTask = nullptr;
+  }
+  
+  screenTimeout = defaultScreenTimeout = DEFAULT_SCREEN_TIMEOUT;
+  defaultCpuFrequency = CPU_FREQ_NORM;
+}
+
+static int onExitEmeliaFace (int idx)
+{
+  EmeliaFaceData_t *hfd = (EmeliaFaceData_t *)(tileDesc[idx].data);
 
   log_d ("idx=%d", idx);
 
@@ -902,6 +997,496 @@ static int createHomerFace (int idx)
   updateHomerFace (idx);
 }
 
+static int createEmeliaFace (int idx)
+{
+  lv_obj_t *parentObj = tileDesc[idx].tile;
+  lv_obj_t *canvas = lv_canvas_create (parentObj, NULL);
+  lv_color_t *cbuf = (lv_color_t *)ps_malloc(LV_CANVAS_BUF_SIZE_TRUE_COLOR_ALPHA(240, 240) * sizeof (lv_color_t));
+
+  memcpy (cbuf, emelia_x.data, emelia_x.data_size);
+  
+  lv_canvas_set_buffer (canvas, cbuf, 240, 240, LV_IMG_CF_TRUE_COLOR_ALPHA);
+  
+  lv_draw_line_dsc_t ticks;
+  lv_draw_line_dsc_init (&ticks);
+  ticks.opa = LV_OPA_100;
+  ticks.color = LV_COLOR_WHITE;
+
+  lv_point_t line[2];
+  
+  for (int i = 0; i < 60; i++)
+  {
+    int bot;
+    float sx = cos(((i * 6) - 90) * 0.0174532925);
+    float sy = sin(((i * 6) - 90) * 0.0174532925);
+    
+    line[0].x = sx * 117 + 120;
+    line[0].y = sy * 117 + 120;
+
+    if ((i % 15) == 0)
+    {
+      bot = 97;
+      ticks.width = 6;
+    }
+    else if ((i % 5) == 0)
+    {
+      bot = 107;
+      ticks.width = 4;
+    }
+    else
+    {
+      bot = 112;
+      ticks.width = 2;
+    }
+    
+    line[1].x = sx * bot + 120;
+    line[1].y = sy * bot + 120;
+    
+    lv_canvas_draw_line (canvas, line, 2, &ticks);
+  }
+  
+  lv_obj_align (canvas, parentObj, LV_ALIGN_CENTER, 0, 0);
+
+  lv_obj_set_event_cb (parentObj, watchFaceEvent_cb);
+
+  tileDesc[idx].onEntry  = onEntryEmeliaFace;
+  tileDesc[idx].onExit   = onExitEmeliaFace;
+  tileDesc[idx].onUpdate = updateEmeliaFace;
+
+  tileDesc[idx].data = malloc (sizeof (EmeliaFaceData_t));
+
+  EmeliaFaceData_t *hfd = (EmeliaFaceData_t *)(tileDesc[idx].data);
+
+  //dw hfd->leftEye = lv_img_create (parentObj, NULL);
+  //dw hfd->rightEye = lv_img_create (parentObj, NULL);
+
+  hfd->minShadow  = lv_img_create (parentObj, NULL);
+  hfd->minHand  = lv_img_create (parentObj, NULL);
+
+  hfd->hourShadow = lv_img_create (parentObj, NULL);
+  hfd->hourHand = lv_img_create (parentObj, NULL);
+
+  hfd->secShadow  = lv_img_create (parentObj, NULL);
+  hfd->secHand  = lv_img_create (parentObj, NULL);
+
+  //dw lv_img_set_src (hfd->leftEye, &eye);
+  //dw lv_img_set_src (hfd->rightEye, &eye);
+
+  lv_img_set_src (hfd->hourShadow, &hourHand); lv_img_set_pivot (hfd->hourShadow, 7,  77);
+  lv_img_set_src (hfd->minShadow,  &minHand);  lv_img_set_pivot (hfd->minShadow,  7, 105);
+  lv_img_set_src (hfd->secShadow,  &secHand);  lv_img_set_pivot (hfd->secShadow, 22, 90);
+
+  lv_img_set_src (hfd->hourHand, &hourHand); lv_img_set_pivot (hfd->hourHand, 7,  77);
+  lv_img_set_src (hfd->minHand,  &minHand);  lv_img_set_pivot (hfd->minHand,  7, 105);
+  lv_img_set_src (hfd->secHand,  &secHand);  lv_img_set_pivot (hfd->secHand, 22, 90);
+
+  //dw lv_obj_align (hfd->leftEye, parentObj, LV_ALIGN_CENTER, -30, -28);
+  //dw lv_obj_align (hfd->rightEye, parentObj, LV_ALIGN_CENTER, 30, -28);
+
+  lv_obj_align (hfd->hourShadow, parentObj, LV_ALIGN_CENTER, 0, -32);
+  lv_obj_align (hfd->minShadow,  parentObj, LV_ALIGN_CENTER, 0, -41);
+  lv_obj_align (hfd->secShadow,  parentObj, LV_ALIGN_CENTER, 3, -15);
+
+  lv_obj_align (hfd->hourHand, parentObj, LV_ALIGN_CENTER, 1, -40);
+  lv_obj_align (hfd->minHand,  parentObj, LV_ALIGN_CENTER, 1, -49);
+  lv_obj_align (hfd->secHand,  parentObj, LV_ALIGN_CENTER, 4, -26);
+
+  static lv_style_t shadowStyle;
+
+  lv_style_init (&shadowStyle);
+  lv_style_set_radius (&shadowStyle, LV_OBJ_PART_MAIN, 0);
+  lv_style_set_image_recolor (&shadowStyle, LV_STATE_DEFAULT, LV_COLOR_BLACK);
+  lv_style_set_image_recolor_opa (&shadowStyle, LV_STATE_DEFAULT, LV_OPA_100);
+  lv_style_set_image_opa (&shadowStyle, LV_STATE_DEFAULT, 63);  // LV_OPA_25ish!
+  lv_style_set_border_width (&shadowStyle, LV_OBJ_PART_MAIN, 0);
+
+  lv_obj_add_style (hfd->hourShadow, LV_IMG_PART_MAIN, &shadowStyle);
+  lv_obj_add_style (hfd->minShadow, LV_IMG_PART_MAIN, &shadowStyle);
+  lv_obj_add_style (hfd->secShadow, LV_IMG_PART_MAIN, &shadowStyle);
+
+  hfd->timeTask = nullptr;
+
+  updateEmeliaFace (idx);
+}
+
+/*****************************************************************************************************
+ * 
+ * Nanny Face
+ * 
+ * 
+ */
+
+typedef struct
+{
+  lv_task_t *timeTask;
+  lv_obj_t *hourHand;
+  lv_obj_t *minHand;
+  lv_obj_t *secHand;
+  lv_obj_t *hourShadow;
+  lv_obj_t *minShadow;
+  lv_obj_t *secShadow;
+} NannyFaceData_t;
+
+static int updateNannyFace (int idx)
+{
+  time_t now;
+  struct tm info;
+  NannyFaceData_t *hfd = (NannyFaceData_t *)(tileDesc[idx].data);
+  static int lastMin = 61;
+  
+  log_d ("idx=%d", idx);
+
+  time (&now);
+  localtime_r (&now, &info);
+
+  int sec  = 60 * info.tm_sec;
+
+  //dw lv_img_set_angle (hfd->leftEye, sec);
+  //dw lv_img_set_angle (hfd->rightEye, sec);
+
+  if (info.tm_min != lastMin)
+  {
+    lastMin = info.tm_min;
+    
+    int hour = (300 * (info.tm_hour % 12)) + (5 * lastMin);
+    int min  = 60 * lastMin;
+
+    lv_img_set_angle (hfd->minShadow, min);
+    lv_img_set_angle (hfd->minHand, min);
+
+    lv_img_set_angle (hfd->hourShadow, hour);
+    lv_img_set_angle (hfd->hourHand, hour);
+  }
+
+  lv_img_set_angle (hfd->secShadow, sec);
+  lv_img_set_angle (hfd->secHand, sec);
+}
+
+static int onEntryNannyFace (int idx)
+{
+  NannyFaceData_t *hfd = (NannyFaceData_t *)(tileDesc[idx].data);
+
+  log_d ("idx=%d", idx);
+
+  screenTimeout = defaultScreenTimeout = DEFAULT_SCREEN_TIMEOUT * 5;
+  defaultCpuFrequency = CPU_FREQ_MAX;
+  setCpuFrequencyMhz (defaultCpuFrequency);
+
+  if (hfd->timeTask == nullptr)
+  {
+    hfd->timeTask = lv_task_create (lv_update_task, 1000, LV_TASK_PRIO_LOWEST, (void *)idx);
+  }
+}
+
+static int onExitNannyFace (int idx)
+{
+  NannyFaceData_t *hfd = (NannyFaceData_t *)(tileDesc[idx].data);
+
+  log_d ("idx=%d", idx);
+
+  if (hfd->timeTask != nullptr)
+  {
+    lv_task_del (hfd->timeTask);
+    hfd->timeTask = nullptr;
+  }
+  
+  screenTimeout = defaultScreenTimeout = DEFAULT_SCREEN_TIMEOUT;
+  defaultCpuFrequency = CPU_FREQ_NORM;
+}
+
+static int createNannyFace (int idx)
+{
+  lv_obj_t *parentObj = tileDesc[idx].tile;
+  lv_obj_t *canvas = lv_canvas_create (parentObj, NULL);
+  lv_color_t *cbuf = (lv_color_t *)ps_malloc(LV_CANVAS_BUF_SIZE_TRUE_COLOR_ALPHA(240, 240) * sizeof (lv_color_t));
+
+  memcpy (cbuf, nanny_1.data, nanny_1.data_size);
+  
+  lv_canvas_set_buffer (canvas, cbuf, 240, 240, LV_IMG_CF_TRUE_COLOR_ALPHA);
+  
+  lv_draw_line_dsc_t ticks;
+  lv_draw_line_dsc_init (&ticks);
+  ticks.opa = LV_OPA_100;
+  ticks.color = LV_COLOR_WHITE;
+
+  lv_point_t line[2];
+  
+  for (int i = 0; i < 60; i++)
+  {
+    int bot;
+    float sx = cos(((i * 6) - 90) * 0.0174532925);
+    float sy = sin(((i * 6) - 90) * 0.0174532925);
+    
+    line[0].x = sx * 117 + 120;
+    line[0].y = sy * 117 + 120;
+
+    if ((i % 15) == 0)
+    {
+      bot = 97;
+      ticks.width = 6;
+    }
+    else if ((i % 5) == 0)
+    {
+      bot = 107;
+      ticks.width = 4;
+    }
+    else
+    {
+      bot = 112;
+      ticks.width = 2;
+    }
+    
+    line[1].x = sx * bot + 120;
+    line[1].y = sy * bot + 120;
+    
+    lv_canvas_draw_line (canvas, line, 2, &ticks);
+  }
+  
+  lv_obj_align (canvas, parentObj, LV_ALIGN_CENTER, 0, 0);
+
+  lv_obj_set_event_cb (parentObj, watchFaceEvent_cb);
+
+  tileDesc[idx].onEntry  = onEntryNannyFace;
+  tileDesc[idx].onExit   = onExitNannyFace;
+  tileDesc[idx].onUpdate = updateNannyFace;
+
+  tileDesc[idx].data = malloc (sizeof (NannyFaceData_t));
+
+  NannyFaceData_t *hfd = (NannyFaceData_t *)(tileDesc[idx].data);
+
+  
+  hfd->minShadow  = lv_img_create (parentObj, NULL);
+  hfd->minHand  = lv_img_create (parentObj, NULL);
+
+  hfd->hourShadow = lv_img_create (parentObj, NULL);
+  hfd->hourHand = lv_img_create (parentObj, NULL);
+
+  hfd->secShadow  = lv_img_create (parentObj, NULL);
+  hfd->secHand  = lv_img_create (parentObj, NULL);
+
+ 
+  lv_img_set_src (hfd->hourShadow, &hourHand); lv_img_set_pivot (hfd->hourShadow, 7,  77);
+  lv_img_set_src (hfd->minShadow,  &minHand);  lv_img_set_pivot (hfd->minShadow,  7, 105);
+  lv_img_set_src (hfd->secShadow,  &secHand);  lv_img_set_pivot (hfd->secShadow, 22, 90);
+
+  lv_img_set_src (hfd->hourHand, &hourHand); lv_img_set_pivot (hfd->hourHand, 7,  77);
+  lv_img_set_src (hfd->minHand,  &minHand);  lv_img_set_pivot (hfd->minHand,  7, 105);
+  lv_img_set_src (hfd->secHand,  &secHand);  lv_img_set_pivot (hfd->secHand, 22, 90);
+
+ 
+  lv_obj_align (hfd->hourShadow, parentObj, LV_ALIGN_CENTER, 0, -32);
+  lv_obj_align (hfd->minShadow,  parentObj, LV_ALIGN_CENTER, 0, -41);
+  lv_obj_align (hfd->secShadow,  parentObj, LV_ALIGN_CENTER, 3, -15);
+
+  lv_obj_align (hfd->hourHand, parentObj, LV_ALIGN_CENTER, 1, -40);
+  lv_obj_align (hfd->minHand,  parentObj, LV_ALIGN_CENTER, 1, -49);
+  lv_obj_align (hfd->secHand,  parentObj, LV_ALIGN_CENTER, 4, -26);
+
+  static lv_style_t shadowStyle;
+
+  lv_style_init (&shadowStyle);
+  lv_style_set_radius (&shadowStyle, LV_OBJ_PART_MAIN, 0);
+  lv_style_set_image_recolor (&shadowStyle, LV_STATE_DEFAULT, LV_COLOR_BLACK);
+  lv_style_set_image_recolor_opa (&shadowStyle, LV_STATE_DEFAULT, LV_OPA_100);
+  lv_style_set_image_opa (&shadowStyle, LV_STATE_DEFAULT, 63);  // LV_OPA_25ish!
+  lv_style_set_border_width (&shadowStyle, LV_OBJ_PART_MAIN, 0);
+
+  lv_obj_add_style (hfd->hourShadow, LV_IMG_PART_MAIN, &shadowStyle);
+  lv_obj_add_style (hfd->minShadow, LV_IMG_PART_MAIN, &shadowStyle);
+  lv_obj_add_style (hfd->secShadow, LV_IMG_PART_MAIN, &shadowStyle);
+
+  hfd->timeTask = nullptr;
+
+  updateNannyFace (idx);
+}
+
+/*****************************************************************************************************
+ * 
+ * Toby Face
+ * 
+ * 
+ */
+typedef struct
+{
+  lv_task_t *timeTask;
+  lv_obj_t *hourHand;
+  lv_obj_t *minHand;
+  lv_obj_t *secHand;
+  lv_obj_t *hourShadow;
+  lv_obj_t *minShadow;
+  lv_obj_t *secShadow;
+} TobyFaceData_t;
+
+static int updateTobyFace (int idx)
+{
+  time_t now;
+  struct tm info;
+  TobyFaceData_t *hfd = (TobyFaceData_t *)(tileDesc[idx].data);
+  static int lastMin = 61;
+  
+  log_d ("idx=%d", idx);
+
+  time (&now);
+  localtime_r (&now, &info);
+
+  int sec  = 60 * info.tm_sec;
+
+   if (info.tm_min != lastMin)
+  {
+    lastMin = info.tm_min;
+    
+    int hour = (300 * (info.tm_hour % 12)) + (5 * lastMin);
+    int min  = 60 * lastMin;
+
+    lv_img_set_angle (hfd->minShadow, min);
+    lv_img_set_angle (hfd->minHand, min);
+
+    lv_img_set_angle (hfd->hourShadow, hour);
+    lv_img_set_angle (hfd->hourHand, hour);
+  }
+
+  lv_img_set_angle (hfd->secShadow, sec);
+  lv_img_set_angle (hfd->secHand, sec);
+}
+
+static int onEntryTobyFace (int idx)
+{
+  TobyFaceData_t *hfd = (TobyFaceData_t *)(tileDesc[idx].data);
+
+  log_d ("idx=%d", idx);
+
+  screenTimeout = defaultScreenTimeout = DEFAULT_SCREEN_TIMEOUT * 5;
+  defaultCpuFrequency = CPU_FREQ_MAX;
+  setCpuFrequencyMhz (defaultCpuFrequency);
+
+  if (hfd->timeTask == nullptr)
+  {
+    hfd->timeTask = lv_task_create (lv_update_task, 1000, LV_TASK_PRIO_LOWEST, (void *)idx);
+  }
+}
+
+static int onExitTobyFace (int idx)
+{
+  TobyFaceData_t *hfd = (TobyFaceData_t *)(tileDesc[idx].data);
+
+  log_d ("idx=%d", idx);
+
+  if (hfd->timeTask != nullptr)
+  {
+    lv_task_del (hfd->timeTask);
+    hfd->timeTask = nullptr;
+  }
+  
+  screenTimeout = defaultScreenTimeout = DEFAULT_SCREEN_TIMEOUT;
+  defaultCpuFrequency = CPU_FREQ_NORM;
+}
+
+static int createTobyFace (int idx)
+{
+  lv_obj_t *parentObj = tileDesc[idx].tile;
+  lv_obj_t *canvas = lv_canvas_create (parentObj, NULL);
+  lv_color_t *cbuf = (lv_color_t *)ps_malloc(LV_CANVAS_BUF_SIZE_TRUE_COLOR_ALPHA(240, 240) * sizeof (lv_color_t));
+
+  memcpy (cbuf, toby_1.data, toby_1.data_size);
+  
+  lv_canvas_set_buffer (canvas, cbuf, 240, 240, LV_IMG_CF_TRUE_COLOR_ALPHA);
+  
+  lv_draw_line_dsc_t ticks;
+  lv_draw_line_dsc_init (&ticks);
+  ticks.opa = LV_OPA_100;
+  ticks.color = LV_COLOR_WHITE;
+
+  lv_point_t line[2];
+  
+  for (int i = 0; i < 60; i++)
+  {
+    int bot;
+    float sx = cos(((i * 6) - 90) * 0.0174532925);
+    float sy = sin(((i * 6) - 90) * 0.0174532925);
+    
+    line[0].x = sx * 117 + 120;
+    line[0].y = sy * 117 + 120;
+
+    if ((i % 15) == 0)
+    {
+      bot = 97;
+      ticks.width = 6;
+    }
+    else if ((i % 5) == 0)
+    {
+      bot = 107;
+      ticks.width = 4;
+    }
+    else
+    {
+      bot = 112;
+      ticks.width = 2;
+    }
+    
+    line[1].x = sx * bot + 120;
+    line[1].y = sy * bot + 120;
+    
+    lv_canvas_draw_line (canvas, line, 2, &ticks);
+  }
+  
+  lv_obj_align (canvas, parentObj, LV_ALIGN_CENTER, 0, 0);
+
+  lv_obj_set_event_cb (parentObj, watchFaceEvent_cb);
+
+  tileDesc[idx].onEntry  = onEntryNannyFace;
+  tileDesc[idx].onExit   = onExitNannyFace;
+  tileDesc[idx].onUpdate = updateNannyFace;
+
+  tileDesc[idx].data = malloc (sizeof (NannyFaceData_t));
+
+  NannyFaceData_t *hfd = (NannyFaceData_t *)(tileDesc[idx].data);
+
+  
+  hfd->minShadow  = lv_img_create (parentObj, NULL);
+  hfd->minHand  = lv_img_create (parentObj, NULL);
+
+  hfd->hourShadow = lv_img_create (parentObj, NULL);
+  hfd->hourHand = lv_img_create (parentObj, NULL);
+
+  hfd->secShadow  = lv_img_create (parentObj, NULL);
+  hfd->secHand  = lv_img_create (parentObj, NULL);
+
+ 
+  lv_img_set_src (hfd->hourShadow, &hourHand); lv_img_set_pivot (hfd->hourShadow, 7,  77);
+  lv_img_set_src (hfd->minShadow,  &minHand);  lv_img_set_pivot (hfd->minShadow,  7, 105);
+  lv_img_set_src (hfd->secShadow,  &secHand);  lv_img_set_pivot (hfd->secShadow, 22, 90);
+
+  lv_img_set_src (hfd->hourHand, &hourHand); lv_img_set_pivot (hfd->hourHand, 7,  77);
+  lv_img_set_src (hfd->minHand,  &minHand);  lv_img_set_pivot (hfd->minHand,  7, 105);
+  lv_img_set_src (hfd->secHand,  &secHand);  lv_img_set_pivot (hfd->secHand, 22, 90);
+
+ 
+  lv_obj_align (hfd->hourShadow, parentObj, LV_ALIGN_CENTER, 0, -32);
+  lv_obj_align (hfd->minShadow,  parentObj, LV_ALIGN_CENTER, 0, -41);
+  lv_obj_align (hfd->secShadow,  parentObj, LV_ALIGN_CENTER, 3, -15);
+
+  lv_obj_align (hfd->hourHand, parentObj, LV_ALIGN_CENTER, 1, -40);
+  lv_obj_align (hfd->minHand,  parentObj, LV_ALIGN_CENTER, 1, -49);
+  lv_obj_align (hfd->secHand,  parentObj, LV_ALIGN_CENTER, 4, -26);
+
+  static lv_style_t shadowStyle;
+
+  lv_style_init (&shadowStyle);
+  lv_style_set_radius (&shadowStyle, LV_OBJ_PART_MAIN, 0);
+  lv_style_set_image_recolor (&shadowStyle, LV_STATE_DEFAULT, LV_COLOR_BLACK);
+  lv_style_set_image_recolor_opa (&shadowStyle, LV_STATE_DEFAULT, LV_OPA_100);
+  lv_style_set_image_opa (&shadowStyle, LV_STATE_DEFAULT, 63);  // LV_OPA_25ish!
+  lv_style_set_border_width (&shadowStyle, LV_OBJ_PART_MAIN, 0);
+
+  lv_obj_add_style (hfd->hourShadow, LV_IMG_PART_MAIN, &shadowStyle);
+  lv_obj_add_style (hfd->minShadow, LV_IMG_PART_MAIN, &shadowStyle);
+  lv_obj_add_style (hfd->secShadow, LV_IMG_PART_MAIN, &shadowStyle);
+
+  hfd->timeTask = nullptr;
+
+  updateTobyFace (idx);
+}
+ 
 /*****************************************************************
  *
  *          ! Keyboard Class
@@ -1441,11 +2026,7 @@ static Task *task = nullptr;
 static Ticker *gTicker = nullptr;
 static MBox *mbox = nullptr;
 
-// static char ssid[64], password[64];
-
-//dw adding defualt Wifi
-static char* ssid     = "paddys_tavern";
-static char* password = "getyourowndrink";
+static char ssid[64], password[64];
 
 /*****************************************************************
  *
@@ -1499,14 +2080,62 @@ void wifi_kb_event_cb(Keyboard::kb_event_t event)
         kb = nullptr;
     }
 }
+//dw 
 
+/*
+ * dw   2
+ * 
+ *
+void printLocalTime(){
+  struct tm time_info;
+  if(!getLocalTime(&time_info)){
+    Serial.println("Failed to obtain time");
+    return;
+  }
+  Serial.println(&time_info, "%A, %B %d %Y %H:%M:%S");
+  Serial.print("Day of week: ");
+  Serial.println(&time_info, "%A");
+  Serial.print("Month: ");
+  Serial.println(&time_info, "%B");
+  Serial.print("Day of Month: ");
+  Serial.println(&time_info, "%d");
+  Serial.print("Year: ");
+  Serial.println(&time_info, "%Y");
+  Serial.print("Hour: ");
+  Serial.println(&time_info, "%H");
+  Serial.print("Hour (12 hour format): ");
+  Serial.println(&time_info, "%I");
+  Serial.print("Minute: ");
+  Serial.println(&time_info, "%M");
+  Serial.print("Second: ");
+  Serial.println(&timeinfo, "%S");
+
+  Serial.println("Time variables");
+  char timeHour[3];
+  strftime(timeHour,3, "%H", &timeinfo);
+  Serial.println(timeHour);
+  char timeWeekDay[10];
+  strftime(timeWeekDay,10, "%A", &timeinfo);
+  Serial.println(timeWeekDay);
+  Serial.println();
+}
+*/
 static void wifi_sync_mbox_cb(lv_task_t *t)
 {
     static  struct tm timeinfo;
     bool ret = false;
     static int retry = 0;
-    configTzTime(RTC_TIME_ZONE, "pool.ntp.org");
+    // configTzTime(RTC_TIME_ZONE, "pool.ntp.org");
 
+     // dw 
+     // Init and get the time
+     long gmtOffset_sec, daylightOffset_sec;
+     gmtOffset_sec = -10 * 3600;
+     daylightOffset_sec = 300;
+         // Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S"); 
+         configTime(gmtOffset_sec, daylightOffset_sec, "au.pool.ntp.org");
+         Serial.println(&timeinfo, "From RTC?? : %A, %B %d %Y %H:%M:%S");    // DW Day in full, Month in full, Day (numeric), Hours, Mins, Secs
+     
     log_d ("task=%0", t);
 
     while (1) {
@@ -1598,22 +2227,6 @@ void wifi_sw_event_cb(uint8_t index, bool en)
          }
         }
         break;
-    case 3: //dw do default WiFi connect
-      if (en)
-      {
-        if (WiFi.isConnected()) {
-            Serial.println("WiFi is connected");
-            Serial.print("IP address: ");
-            Serial.println(WiFi.localIP());
-        }
-        else {
-            WiFi.begin(ssid, password);
-            Serial.println("Connecting ..");
-            Serial.print("IP address: ");
-            Serial.println(WiFi.localIP());
-        }
-         
-      }
     default:
         break;
     }
@@ -1682,9 +2295,9 @@ int createWiFiSwitches (int idx)
   lv_obj_t *parentObj = tileDesc[idx].tile;
 
   log_d ("idx=%d", idx);
-    Switch::switch_cfg_t cfg[4] = {{"Switch", wifi_sw_event_cb}, {"Scan", wifi_sw_event_cb}, {"NTP Sync", wifi_sw_event_cb}, {"WiFi Deflt", wifi_sw_event_cb}};
+    Switch::switch_cfg_t cfg[3] = {{"Switch", wifi_sw_event_cb}, {"Scan", wifi_sw_event_cb}, {"NTP Sync", wifi_sw_event_cb}};
     sw = new Switch;
-    sw->create(cfg, 4,
+    sw->create(cfg, 3,
 	      nullptr,
         parentObj);
     sw->align(parentObj, LV_ALIGN_IN_TOP_MID);

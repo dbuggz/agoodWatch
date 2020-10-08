@@ -15,8 +15,10 @@ Created by Lewis he on October 10, 2019.
 #define STR(_s) XSTR(_s)
 #define XSTR(_s) #_s
 
-#define THIS_VERSION_ID  0.60
+#define THIS_VERSION_ID  0.62
 #define THIS_VERSION_STR "Ver " STR(THIS_VERSION_ID)
+
+
 
 /*
  * Use a time-zone string from https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
